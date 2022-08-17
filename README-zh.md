@@ -4,6 +4,11 @@ PLC读写库及命令行工具。
 
 支持西门子s7协议和modbus协议(modbus-tcp)。
 
+关联项目：
+
+- [s7plc](https://github.com/skyshore2001/s7plc/): 超简单的PHP语言的西门子S7系列PLC读写模块
+- [plcserver](https://github.com/skyshore2001/plcserver/): PLC访问中间件，通过web接口来对PLC进行读、写、**监控值变化并回调**。
+
 ## 命令行工具plc-access.php
 
 读S7 PLC:
@@ -25,6 +30,13 @@ s7协议地址格式为：
 - array format:
   - DB{dbNumber}.{startAddr}:{type}[amount]
   - DB{dbNumber}.{startAddr}.{bitOffset}:bit[amount]
+
+**s7地址格式对照**
+
+- DB21.DBB4 (byte): DB21.4:int8 (-127~127) or DB21.4:uint8 (0~256)
+- DB21.DBW4 (word): DB21.4:int16 (-32767~32768) or DB21.4:uint16 (0~65536)
+- DB21.DBD4 (dword): DB21.4:int32 or DB21.4:uint32 or DB21.4:float
+- DB21.DBX4.0 (bit): DB21.4.0:bit
 
 modbus-tcp协议读、写：（加-t modbus参数）
 
@@ -69,4 +81,57 @@ modbus协议地址格式为：
 
 	php plc-access.php DB21.0:uint32 -x
 	"x41420043"
+
+## PHP编程示例
+
+[读写S7Plc示例](https://github.com/skyshore2001/s7plc/)如下：
+
+方式一：单次读写（每次调用发起一次TCP短连接）
+
+```php
+require("common.php");
+require("S7Plc.php");
+try {
+	S7Plc::writePlc("192.168.1.101", [["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+
+	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	var_dump($res);
+	// on success $res=[ 70000, 3.14, 1 ]
+}
+catch (S7PlcException $ex) {
+	echo('error: ' . $ex->getMessage());
+}
+```
+
+方式二：连续读写（维持一个TCP长连接）
+
+```php
+try {
+	$plc = new S7Plc("192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
+	$plc->write([["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+	$res = $plc->read(["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	// on success $res=[ 30000, 3.14, 1 ]
+}
+catch (S7PlcException $ex) {
+	echo('error: ' . $ex->getMessage());
+}
+```
+**Read/write array**
+
+	$plc->write(["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
+	$res = $plc->read(["DB21.0:int8[4]", "DB21.4:float[2]"]);
+	// $res example: [ [1,2,3,4], [3.3, 4.4] ]
+
+OR
+
+	S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
+	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"]);
+
+It's ok to contain both array and elements:
+
+	S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"], [ [1,2,3,4], 3.3, 4.4 ]);
+	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
+	// $res example: [ [1,2,3,4], 3.3, 4.4 ]
+
+如果是Modbus协议，换成包含ModbusClient.php文件和使用ModbusClient类即可，接口相似。
 

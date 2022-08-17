@@ -2,10 +2,17 @@
 
 PLC read/write lib and command line tool.
 
+[中文文档](README-zh.md)
+
 Support protocols:
 
 - siemens s7
 - modbus-tcp
+
+Reference:
+
+- [s7plc](https://github.com/skyshore2001/s7plc/): A php lib to read/write Siements S7 PLC series like S7-1200/S7-1500 via S7 protocol.
+- [plcserver](https://github.com/skyshore2001/plcserver/): PLC access service that supports read/write/**watch and callback** via web service
 
 ## command-line tool: plc-access.php
 
@@ -28,6 +35,13 @@ Siemens s7 address format:
 - array format:
   - DB{dbNumber}.{startAddr}:{type}[amount]
   - DB{dbNumber}.{startAddr}.{bitOffset}:bit[amount]
+
+**Address Mapping Example**
+
+- DB21.DBB4 (byte): DB21.4:int8 (-127~127) or DB21.4:uint8 (0~256)
+- DB21.DBW4 (word): DB21.4:int16 (-32767~32768) or DB21.4:uint16 (0~65536)
+- DB21.DBD4 (dword): DB21.4:int32 or DB21.4:uint32 or DB21.4:float
+- DB21.DBX4.0 (bit): DB21.4.0:bit
 
 read/write via modbus-tcp (add param -t: modbus)
 
@@ -72,4 +86,64 @@ Support types:
 
 	php plc-access.php DB21.0:uint32 -x
 	"x41420043"
+
+## Programming read/write PLC
+
+Let's take [S7Plc read/write](https://github.com/skyshore2001/s7plc/) as example:
+
+Usage (level 1): read/write once (short connection)
+
+```php
+require("common.php");
+require("S7Plc.php");
+try {
+	S7Plc::writePlc("192.168.1.101", [["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+
+	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	var_dump($res);
+	// on success $res=[ 70000, 3.14, 1 ]
+}
+catch (S7PlcException $ex) {
+	echo('error: ' . $ex->getMessage());
+}
+```
+
+Usage (level 2): read and write in one connection (long connection)
+
+```php
+try {
+	$plc = new S7Plc("192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
+	$plc->write([["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+	$res = $plc->read(["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	// on success $res=[ 30000, 3.14, 1 ]
+}
+catch (S7PlcException $ex) {
+	echo('error: ' . $ex->getMessage());
+}
+```
+
+**Read/write array**
+
+```php
+$plc->write(["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
+$res = $plc->read(["DB21.0:int8[4]", "DB21.4:float[2]"]);
+// $res example: [ [1,2,3,4], [3.3, 4.4] ]
+```
+
+OR
+
+```php
+S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
+$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"]);
+```
+
+It's ok to contain both array and elements:
+
+```php
+S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"], [ [1,2,3,4], 3.3, 4.4 ]);
+$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
+// $res example: [ [1,2,3,4], 3.3, 4.4 ]
+```
+
+For modbus protocol, just include "ModbusClient.php" and use class "ModbusClient" instead.
 
