@@ -57,7 +57,7 @@ modbus-tcp write and read:
 
 */
 
-require("jdcloud-php/common.php");
+require("common.php");
 require("class/S7Plc.php");
 require("class/ModbusClient.php");
 
@@ -142,7 +142,7 @@ try {
 	if ($opt['read']) {
 		$res = $plc->read($opt['read']);
 		handleRes($res);
-		echo("=== read ok: " . jsonEncode($res, true));
+		echo("=== read ok: " . json_encode($res, JSON_PRETTY_PRINT));
 	}
 }
 catch (Exception $ex) {
