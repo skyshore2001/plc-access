@@ -129,8 +129,6 @@ NOTE: It depends to the byte order for uint16/uint32. This example only applies 
 
 ## Programming read/write PLC
 
-Let's take [S7Plc read/write](https://github.com/skyshore2001/s7plc/) as example:
-
 Usage (level 1): read/write once (short connection)
 
 ```php
@@ -144,7 +142,7 @@ try {
 		["DB21.12.0:bit", 1]
 	]);
 
-	$res = PlcAccess::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	$res = PlcAccess::readPlc("s7", "192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
 	var_dump($res);
 	// on success $res=[ 70000, 3.14, 1 ]
 }
@@ -200,7 +198,11 @@ $res = $plc->read(["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
 // $res example: [ [1,2,3,4], 3.3, 4.4 ]
 ```
 
-For modbus protocol, just include "ModbusClient.php" and use class "ModbusClient" instead.
+For modbus protocol, just change protocol to "modbus" and use modbus style address like 'S1.0:word':
+
+	$plc = PlcAccess::create("modbus", "192.168.1.101"); // default tcp port 105
+	$plc->write(["S1.0:word", 99]);
+	$res = $plc->read(["S1.0:word"]);
 
 **Read/write string**
 

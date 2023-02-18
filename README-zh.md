@@ -130,7 +130,7 @@ try {
 		["DB21.12.0:bit", 1]
 	]);
 
-	$res = PlcAccess::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	$res = PlcAccess::readPlc("s7", "192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
 	var_dump($res);
 	// on success $res=[ 70000, 3.14, 1 ]
 }
@@ -185,6 +185,10 @@ $res = $plc->read(["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
 ```
 
 如果是Modbus协议，换成Modbus地址格式即可，接口相同。
+
+	$plc = PlcAccess::create("modbus", "192.168.1.101"); // default tcp port 105
+	$plc->write(["S1.0:word", 99]);
+	$res = $plc->read(["S1.0:word"]);
 
 **字符串读写**
 
