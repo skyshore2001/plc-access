@@ -51,10 +51,11 @@ modbus协议地址格式为：
 
 - S{slaveId}.{startAddr}:{type}
 - 注意：startAddr为0开始，以字(word)为单位(对比s7协议是字节为单位)
+读写bit对应coils，其它对应Holding registers.
 
 参数选项：
 
--h : plc host. default=127.0.0.1:102
+-h : plc host. 缺省值=127.0.0.1, s7默认端口102，modbus默认端口502
 -p : proto. Enum(s7(default), modbus)
 -x : 写时以16进制设置，读后显示16进制数据。
 

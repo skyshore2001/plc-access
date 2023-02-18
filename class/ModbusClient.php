@@ -71,9 +71,9 @@ class ModbusClient
 		"uint32" => ["fmt"=>"N", "len"=>4],
 
 		"float" => ["fmt"=>"f", "len"=>4],
-		"char" => ["fmt"=>"a", "len"=>1]
+		"char" => ["fmt"=>"a", "len"=>1],
+		"string" => ["fmt"=>"a", "len"=>1]
 		// "double" => ["fmt"=>"?", "len"=>8, "WordLen"=>0x0?, "TransportSize"=>0x0?],
-		// "string[]"
 	];
 
 	function __construct($addr) {
@@ -138,11 +138,26 @@ class ModbusClient
 				}
 			}
 			else {
-				if ($item["amount"] == 1) {
-					$value = unpack($fmt, substr($res, $pos, $byteCnt))[1];
+				$value0 = substr($res, $pos, $byteCnt);
+				if ($t == "char") {
+					$value = $value0;
+				}
+				else if ($t == "string") {
+					$rv = unpack("C2", substr($value0, 0, 2));
+					$cap = $rv[1];
+					$strlen = $rv[2];
+					if ($strlen < strlen($value0) - 2) {
+						$value = substr($value0, 2, $strlen);
+					}
+					else {
+						$value = substr($value0, 2);
+					}
+				}
+				else if ($item["amount"] == 1) {
+					$value = unpack($fmt, $value0)[1];
 				}
 				else { // 数组
-					$rv = unpack($fmt.$item["amount"], substr($res, $pos, $byteCnt));
+					$rv = unpack($fmt.$item["amount"], $value0);
 					$value = array_values($rv);
 				}
 				self::fixInt($item["type"], $value);
@@ -261,8 +276,12 @@ class ModbusClient
 			$dataLen = strlen($valuePack);
 		}
 		else {
-			$fmt = self::$typeMap[$item["type"]]["fmt"];
-			if ($item["amount"] > 1) { // 数组处理
+			$t = $item["type"];
+			$fmt = self::$typeMap[$t]["fmt"];
+			if ($t == "char" || $t == "string") {
+				$valuePack = $item["value"];
+			}
+			else if ($item["amount"] > 1) { // 数组处理
 				$valuePack = '';
 				foreach ($item["value"] as $v) {
 					$valuePack .= pack($fmt, $v);
@@ -343,7 +362,25 @@ class ModbusClient
 			"amount" => (@$ms["amount"]?:1)
 		];
 		if ($value !== null) {
-			if ($item1["amount"] > 1) {
+			// char and string is specical!
+			if ($item1["type"] == "char") {
+				$diff = $item1["amount"] - strlen($value);
+				if ($diff > 0) { // pad 0 if not enough
+					$value .= str_repeat("\x00", $diff);
+				}
+				else if ($diff < 0) { // trunk if too long
+					$value = substr($value, 0, $item1["amount"]);
+				}
+			}
+			else if ($item1["type"] == "string") {
+				$diff = $item1["amount"] - strlen($value);
+				if ($diff < 0) { // trunk if too long
+					$value = substr($value, 0, $item1["amount"]);
+				}
+				$value = pack("CC", $item1["amount"], strlen($value)) . $value;
+				$item1["amount"] = strlen($value);
+			}
+			else if ($item1["amount"] > 1) {
 				if (! is_array($value)) {
 					$error = "require array value for $itemAddr";
 					throw new ModbusException($error);
@@ -354,6 +391,11 @@ class ModbusClient
 				}
 			}
 			$item1["value"] = $value;
+		}
+		else {
+			if ($item1["type"] == "string") {
+				$item1["amount"] += 2;
+			}
 		}
 		return $item1;
 	}

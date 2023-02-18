@@ -7,7 +7,7 @@ write:
 	plc-access -h 192.168.1.101 DB1.1:uint8=200
 
 write and read:
-	php plc-access.php DB21.1:uint8=ff  DB21.1.0:bit DB21.1.7:bit  -x
+	php plc-access.php DB21.1:uint8=0xff  DB21.1.0:bit DB21.1.7:bit  -x
 
 item address: 
 

@@ -64,7 +64,7 @@ modbus address format:
 
 Command options:
 
--h : plc host. default=127.0.0.1:102
+-h : plc host. default=127.0.0.1, default port for s7 is 102, and 502 for modbus
 -p : proto. Enum(S7(default), modbus)
 -x : read/write using 16-based(hex) numbers.
 
