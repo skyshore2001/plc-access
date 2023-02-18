@@ -87,9 +87,9 @@ class S7Plc
 		"uint32" => ["fmt"=>"N", "len"=>4, "WordLen"=>0x06, "TransportSize"=>0x04],
 
 		"float" => ["fmt"=>"f", "len"=>4, "WordLen"=>0x08, "TransportSize"=>0x07],
-		"char" => ["fmt"=>"a", "len"=>1, "WordLen"=>0x03, "TransportSize"=>0x09]
+		"char" => ["fmt"=>"a", "len"=>1, "WordLen"=>0x03, "TransportSize"=>0x09],
+		"string" => ["fmt"=>"a", "len"=>1, "WordLen"=>0x03, "TransportSize"=>0x09]
 		// "double" => ["fmt"=>"?", "len"=>8, "WordLen"=>0x0?, "TransportSize"=>0x0?],
-		// "string[]"
 	];
 
 	const pdu_type_CR    	= 0xE0;  // Connection request
@@ -173,7 +173,21 @@ class S7Plc
 			$type = $items1[$i]["type"];
 			$fmt = self::$typeMap[$type]["fmt"];
 			$amount = $items1[$i]["amount"];
-			if ($amount > 1) { // 数组
+			if ($type == "char") {
+				$value1 = $value;
+			}
+			else if ($type == "string") {
+				$rv = unpack("C2", substr($value, 0, 2));
+				$cap = $rv[1];
+				$strlen = $rv[2];
+				if ($strlen < strlen($value) - 2) {
+					$value1 = substr($value, 2, $strlen);
+				}
+				else {
+					$value1 = substr($value, 2);
+				}
+			}
+			else if ($amount > 1) { // 数组
 				$value1 = array_values(unpack($fmt . $amount, $value));
 			}
 			else {
@@ -190,6 +204,7 @@ class S7Plc
 		return $ret;
 	}
 
+	// 无符号转有符号
 	private static function fixInt($type, &$value) {
 		if (is_array($value)) {
 			foreach ($value as &$v) {
@@ -319,7 +334,10 @@ class S7Plc
 			$ReqParams .= $ReqFunWriteItem;
 			// ReqFunWriteDataItem 值在所有WriteItem之后
 			$fmt = self::$typeMap[$t]["fmt"];
-			if ($item["amount"] > 1) { // 数组处理
+			if ($t == "char" || $t == "string") {
+				$valuePack = $item["value"];
+			}
+			else if ($item["amount"] > 1) { // 数组处理
 				$valuePack = '';
 				foreach ($item["value"] as $v) {
 					$valuePack .= pack($fmt, $v);
@@ -447,7 +465,25 @@ class S7Plc
 		];
 
 		if ($value !== null) {
-			if ($item1["amount"] > 1) {
+			// char and string is specical!
+			if ($item1["type"] == "char") {
+				$diff = $item1["amount"] - strlen($value);
+				if ($diff > 0) { // pad 0 if not enough
+					$value .= str_repeat("\x00", $diff);
+				}
+				else if ($diff < 0) { // trunk if too long
+					$value = substr($value, 0, $item1["amount"]);
+				}
+			}
+			else if ($item1["type"] == "string") {
+				$diff = $item1["amount"] - strlen($value);
+				if ($diff < 0) { // trunk if too long
+					$value = substr($value, 0, $item1["amount"]);
+				}
+				$value = pack("CC", $item1["amount"], strlen($value)) . $value;
+				$item1["amount"] += 2;
+			}
+			else if ($item1["amount"] > 1) {
 				if (! is_array($value)) {
 					$error = "require array value for $itemAddr";
 					throw new S7PlcException($error);
@@ -468,6 +504,11 @@ class S7Plc
 				}
 			}
 			$item1["value"] = $value;
+		}
+		else {
+			if ($item1["type"] == "string") {
+				$item1["amount"] += 2;
+			}
 		}
 		return $item1;
 	}

@@ -19,9 +19,13 @@ PLC读写库及命令行工具。
 
 	php plc-access.php -h 192.168.1.101 DB1.1:uint8=200
 
-读、写，使用16进制：
+写时支持使用16进制，以"0x"开头，兼容C语言语法：
 
-	php plc-access.php DB21.1:uint8=ff  DB21.1.0:bit DB21.1.7:bit  -x
+	php plc-access.php DB21.1:uint8=0xff
+
+读时可以用-x参数将结果显示为16进制：
+
+	php plc-access.php DB21.1.0:bit DB21.1.7:bit  -x
 
 s7协议地址格式为：
 
@@ -64,23 +68,44 @@ modbus协议地址格式为：
 - uint32/dword
 - bit/bool
 - float
-- char
+- char[最大长度]
+- string[最大长度]
 
 数组读写：
 
 	php plc-access.php -h 192.168.1.101 DB1.1:byte[2]=125,225
 
-字符读写：
+字符串读写：定长字符串用`char[长度]`（长度不超过256）, 变长字符串用`string[长度]`（长度不超过254）
 
-	php plc-access.php DB21.0:char[4]=A,B,,C
+	php plc-access.php DB21.0:char[4]="AB"
 	php plc-access.php DB21.0:char[4]
-	"AB\u0000C"
+	"AB\x00\x00"
 
-	php plc-access.php DB21.0:char[2]=A,B DB21.0:uint8[2]
-	"AB", [65,66]
+定长字符串写入时，若实际长度不足，自动补0，若超过则截断。读出时与指定长度相同。
 
-	php plc-access.php DB21.0:uint32 -x
-	"x41420043"
+	php plc-access.php DB21.0:string[4]="AB"
+	php plc-access.php DB21.0:string[4]
+	"AB"
+
+变长字符串写入时，若实际长度不足，只写实际长度部分，若超过则截断。读出时为实际长度，小于等于指定长度。
+变长字符串string类型与西门子S7系列PLC的字符串格式兼容，它比char类型多2字节头部，分别表示总长度和实际长度。
+
+兼容C语言风格的"\x00"风格(两个16进制数字表示一个字符)，如
+
+	php plc-access.php DB21.0:char[4]="A\x00\x01B"
+	php plc-access.php DB21.0:char[4]
+	"A\x00\x01B"
+
+这与byte[4]或uint16[2]或uint32写入的效果相同(西门子PLC字节序为大端，如果是小端机，顺序会不一样)，如等价于：
+
+	php plc-access.php DB21.0:byte[4]=0x61,0,1,0x62 -x
+	[0x61, 0x00, 0x01, 0x62]
+
+	php plc-access.php DB21.0:uint16[2]=0x6100,0x0162 DB21.0:byte[4] -x
+
+	php plc-access.php DB21.0:uint32=0x61000162 DB21.0:byte[4] -x
+
+TODO: 字节序指定参数。
 
 ## PHP编程示例
 
@@ -116,22 +141,42 @@ catch (S7PlcException $ex) {
 	echo('error: ' . $ex->getMessage());
 }
 ```
-**Read/write array**
+**数组读写**
 
 	$plc->write(["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
 	$res = $plc->read(["DB21.0:int8[4]", "DB21.4:float[2]"]);
 	// $res example: [ [1,2,3,4], [3.3, 4.4] ]
 
-OR
+或
 
 	S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
 	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"]);
 
-It's ok to contain both array and elements:
+在一次读写中，可以同时使用数组和普通元素：
 
 	S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"], [ [1,2,3,4], 3.3, 4.4 ]);
 	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
 	// $res example: [ [1,2,3,4], 3.3, 4.4 ]
 
 如果是Modbus协议，换成包含ModbusClient.php文件和使用ModbusClient类即可，接口相似。
+
+**字符串读写**
+
+读4字节定长字符串，注意字符串最长为256字节：
+
+	$plc = new S7Plc("192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
+	$plc->write(["DB21.0:char[4]"], [ ["abcd"] ]);
+	$res = $plc->read(["DB21.0:char[4]"]);
+
+可以写任意字符，长度不足会自动补0，超过会自动截断，如：
+
+	$plc->write(["DB21.0:char[4]"], [ ["\x01\x02\x03"] ]); // 实际写入"\x01\x02\x03\x00"
+	$plc->write(["DB21.0:char[4]"], [ ["abcdef"] ]); // 实际写入"abcd"
+
+变长字符串string类型与西门子S7系列PLC的字符串格式兼容，它比char类型多2字节头部，分别表示总长度和实际长度，因而最大长度为254：
+
+	$plc->write(["DB21.0:string[4]"], [ ["ab"] ]); // 实际写入 "\x04\x02ab"
+	$res = $plc->read(["DB21.0:string[4]"]); // 读到"ab"
+
+与定长字符串相比，变长字符串读数据时会读全部长度，返回实际长度的字符串，写数据时只会写指定长度。
 
