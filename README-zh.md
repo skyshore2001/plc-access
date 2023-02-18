@@ -76,6 +76,11 @@ modbus协议地址格式为：
 
 	php plc-access.php -h 192.168.1.101 DB1.1:byte[2]=125,225
 
+如果数组元素个数不足指定长度，会自动补0；反之若超出则自动截取为指定长度。
+
+	php plc-access.php -h 192.168.1.101 DB1.1:byte[20]=9,10
+	前两个byte设置9,10，其它清零。
+
 字符串读写：定长字符串用`char[长度]`（长度不超过256）, 变长字符串用`string[长度]`（长度不超过254）
 
 	php plc-access.php DB21.0:char[4]="AB"
@@ -116,17 +121,20 @@ TODO: 字节序指定参数。
 
 ```php
 require("common.php");
-require("class/S7Plc.php");
-// require("class/ModbusClient.php"); // for modbus-tcp
+require("class/PlcAccess.php");
 
 try {
-	S7Plc::writePlc("192.168.1.101", [["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+	PlcAccess::writePlc("s7", "192.168.1.101", [
+		["DB21.0:int32", 70000], // [item, value]
+		["DB21.4:float", 3.14],
+		["DB21.12.0:bit", 1]
+	]);
 
-	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	$res = PlcAccess::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
 	var_dump($res);
 	// on success $res=[ 70000, 3.14, 1 ]
 }
-catch (S7PlcException $ex) {
+catch (PlcAccessException $ex) {
 	echo('error: ' . $ex->getMessage());
 }
 ```
@@ -135,50 +143,64 @@ catch (S7PlcException $ex) {
 
 ```php
 try {
-	$plc = new S7Plc("192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
-	$plc->write([["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+	$plc = PlcAccess::create("s7", "192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
+	$plc->write([
+		["DB21.0:int32", 70000],
+		["DB21.4:float", 3.14],
+		["DB21.12.0:bit", 1]
+	]);
 	$res = $plc->read(["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
 	// on success $res=[ 30000, 3.14, 1 ]
 }
-catch (S7PlcException $ex) {
+catch (PlcAccessException $ex) {
 	echo('error: ' . $ex->getMessage());
 }
 ```
 **数组读写**
 
-	$plc->write(["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
-	$res = $plc->read(["DB21.0:int8[4]", "DB21.4:float[2]"]);
-	// $res example: [ [1,2,3,4], [3.3, 4.4] ]
+```php
+$plc->write([
+	["DB21.0:int8[4]", [1,2,3,4]],
+	["DB21.4:float[2]", [3.3, 4.4]
+]);
+$res = $plc->read(["DB21.0:int8[4]", "DB21.4:float[2]"]);
+// $res example: [ [1,2,3,4], [3.3, 4.4] ]
+```
 
-或
+如果数组元素个数不足指定长度，会自动补0；反之若超出则自动截取为指定长度。
 
-	S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
-	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"]);
+	$plc->write([ ["DB21.0:int8[4]", [1,2]] ]); // 等价于写[1,2,0,0]
+	$plc->write([ ["DB21.0:int8[4]", []] ]); // 全部清零
 
 在一次读写中，可以同时使用数组和普通元素：
 
-	S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"], [ [1,2,3,4], 3.3, 4.4 ]);
-	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
-	// $res example: [ [1,2,3,4], 3.3, 4.4 ]
+```php
+$plc->write([
+	["DB21.0:int8[4]", [3,4] ],
+	["DB21.4:float", 3.3],
+	["DB21.8:float", 4.4]
+]);
+$res = $plc->read(["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
+// $res example: [ [1,2,3,4], 3.3, 4.4 ]
+```
 
-如果是Modbus协议，换成包含ModbusClient.php文件和使用ModbusClient类即可，接口相似。
+如果是Modbus协议，换成Modbus地址格式即可，接口相同。
 
 **字符串读写**
 
 读4字节定长字符串，注意字符串最长为256字节：
 
-	$plc = new S7Plc("192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
-	$plc->write(["DB21.0:char[4]"], [ ["abcd"] ]);
+	$plc->write([ ["DB21.0:char[4]", "abcd"] ]);
 	$res = $plc->read(["DB21.0:char[4]"]);
 
 可以写任意字符，长度不足会自动补0，超过会自动截断，如：
 
-	$plc->write(["DB21.0:char[4]"], [ ["\x01\x02\x03"] ]); // 实际写入"\x01\x02\x03\x00"
-	$plc->write(["DB21.0:char[4]"], [ ["abcdef"] ]); // 实际写入"abcd"
+	$plc->write([ ["DB21.0:char[4]", "\x01\x02\x03"] ]); // 实际写入"\x01\x02\x03\x00"
+	$plc->write([ ["DB21.0:char[4]", "abcdef"] ]); // 实际写入"abcd"
 
 变长字符串string类型与西门子S7系列PLC的字符串格式兼容，它比char类型多2字节头部，分别表示总长度和实际长度，因而最大长度为254：
 
-	$plc->write(["DB21.0:string[4]"], [ ["ab"] ]); // 实际写入 "\x04\x02ab"
+	$plc->write([ ["DB21.0:string[4]", "ab"] ]); // 实际写入 "\x04\x02ab"
 	$res = $plc->read(["DB21.0:string[4]"]); // 读到"ab"
 
 与定长字符串相比，变长字符串读数据时会读全部长度，返回实际长度的字符串，写数据时只会写指定长度。

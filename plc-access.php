@@ -58,8 +58,7 @@ modbus-tcp write and read:
 */
 
 require("common.php");
-require("class/S7Plc.php");
-require("class/ModbusClient.php");
+require("class/PlcAccess.php");
 
 if ($argc < 2) {
 	echo("Usage:
@@ -126,24 +125,16 @@ foreach ($argv as $i=>$v) {
 
 echo("=== access plc {$opt['addr']}\n");
 try {
-	if ($opt['proto'] == 's7') {
-		$plc = new S7Plc($opt['addr']);
-	}
-	else if ($opt['proto'] == 'modbus') {
-		$plc = new ModbusClient($opt['addr']);
-	}
-	else {
-		echo("*** unknown proto {$opt['proto']}\n");
-	}
+	$plc = PlcAccess::create($opt['proto'], $opt['addr']);
 	if ($opt['write']) {
-		preWrite($opt['write']);
+		beforeWrite($opt['write']);
 		$plc->write($opt['write']);
 		echo("=== write ok\n");
 	}
 
 	if ($opt['read']) {
 		$res = $plc->read($opt['read']);
-		preRead($res);
+		afterRead($res);
 		echo("=== read ok: " . json_encode($res, JSON_PRETTY_PRINT));
 	}
 }
@@ -173,7 +164,7 @@ function encodeString($v) {
 }
 
 // req: ["DB100.0:uint8", 100] or ["DB100.0:uint8[2]", [100, 101]]
-function preWrite(&$req) {
+function beforeWrite(&$req) {
 	$handleOne = function ($type, &$val) {
 		if (isStringType($type)) {
 			$val = decodeString($val);
@@ -194,12 +185,12 @@ function preWrite(&$req) {
 	}
 }
 
-function preRead(&$res) {
+function afterRead(&$res) {
 	global $opt;
 	$useHex = $opt["useHex"];
 	foreach ($res as &$v) {
 		if (is_array($v)) {
-			preRead($v);
+			afterRead($v);
 		}
 		else if (is_string($v)) {
 			$v = encodeString($v);

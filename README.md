@@ -85,6 +85,12 @@ Support types:
 
 	php plc-access.php -h 192.168.1.101 DB1.1:byte[2]=125,225
 
+If element count is less than the specified count, 0 is padded; 
+or truncated if element count is greater.
+
+	php plc-access.php -h 192.168.1.101 DB1.1:byte[20]=9,10
+	set first 2 bytes to 9,10, and others to 0
+
 **read/write char/string:**
 
 `char[capacity]` type is fixed-length string. Write function will pad 0 if `length<capacity`, or truncate to capacity if `length>capacity`.
@@ -129,17 +135,20 @@ Usage (level 1): read/write once (short connection)
 
 ```php
 require("common.php");
-require("class/S7Plc.php");
-// require("class/ModbusClient.php"); // for modbus-tcp
+require("class/PlcAccess.php");
 
 try {
-	S7Plc::writePlc("192.168.1.101", [["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+	PlcAccess::writePlc("s7", "192.168.1.101", [
+		["DB21.0:int32", 70000],
+		["DB21.4:float", 3.14],
+		["DB21.12.0:bit", 1]
+	]);
 
-	$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
+	$res = PlcAccess::readPlc("192.168.1.101", ["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
 	var_dump($res);
 	// on success $res=[ 70000, 3.14, 1 ]
 }
-catch (S7PlcException $ex) {
+catch (PlcAccessException $ex) {
 	echo('error: ' . $ex->getMessage());
 }
 ```
@@ -148,12 +157,16 @@ Usage (level 2): read and write in one connection (long connection)
 
 ```php
 try {
-	$plc = new S7Plc("192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
-	$plc->write([["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
+	$plc = PlcAccess::create("s7", "192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
+	$plc->write([
+		["DB21.0:int32", 70000],
+		["DB21.4:float", 3.14],
+		["DB21.12.0:bit", 1]
+	]);
 	$res = $plc->read(["DB21.0:int32", "DB21.4:float", "DB21.12.0:bit"]);
 	// on success $res=[ 30000, 3.14, 1 ]
 }
-catch (S7PlcException $ex) {
+catch (PlcAccessException $ex) {
 	echo('error: ' . $ex->getMessage());
 }
 ```
@@ -161,23 +174,29 @@ catch (S7PlcException $ex) {
 **Read/write array**
 
 ```php
-$plc->write(["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
+$plc->write([
+	["DB21.0:int8[4]", [1,2,3,4]],
+	["DB21.4:float[2]", [3.3, 4.4]
+]);
 $res = $plc->read(["DB21.0:int8[4]", "DB21.4:float[2]"]);
 // $res example: [ [1,2,3,4], [3.3, 4.4] ]
 ```
 
-OR
+If element count is less than the specified count, 0 is padded; 
+or truncated if element count is greater.
 
-```php
-S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"], [ [1,2,3,4], [3.3, 4.4] ]);
-$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float[2]"]);
-```
+	$plc->write([ ["DB21.0:int8[4]", [1,2]] ]); // equal to set [1,2,0,0]
+	$plc->write([ ["DB21.0:int8[4]", []] ]); // all 4 clear to 0
 
 It's ok to contain both array type and non-array type:
 
 ```php
-S7Plc::writePlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"], [ [1,2,3,4], 3.3, 4.4 ]);
-$res = S7Plc::readPlc("192.168.1.101", ["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
+$plc->write([
+	["DB21.0:int8[4]", [3,4]],
+	["DB21.4:float", 3.3],
+	["DB21.8:float", 4.4]
+]);
+$res = $plc->read(["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
 // $res example: [ [1,2,3,4], 3.3, 4.4 ]
 ```
 
@@ -187,20 +206,19 @@ For modbus protocol, just include "ModbusClient.php" and use class "ModbusClient
 
 Type `char[capacity]` is fixed-length string:
 
-	$plc = new S7Plc("192.168.1.101"); // default tcp port 102: "192.168.1.101:102"
-	$plc->write(["DB21.0:char[4]"], [ ["abcd"] ]);
+	$plc->write([ ["DB21.0:char[4]", "abcd"] ]);
 	$res = $plc->read(["DB21.0:char[4]"]);
 
 Note: the max capacity for the fixed-length string is 256.
 
 You can write any chars including non-printing ones. It will pad 0 if the string length is not enough, or truncate to capacity if too long.
 
-	$plc->write(["DB21.0:char[4]"], [ ["\x01\x02\x03"] ]); // actually write "\x01\x02\x03\x00"
-	$plc->write(["DB21.0:char[4]"], [ ["abcdef"] ]); // actually write "abcd"
+	$plc->write([ ["DB21.0:char[4]", "\x01\x02\x03"] ]); // actually write "\x01\x02\x03\x00"
+	$plc->write([ ["DB21.0:char[4]", "abcdef"] ]); // actually write "abcd"
 
 Type `string[capacity]` is variable-length string, compatible with Siemens S7 string (1 byte capacity + 1 byte length + chars). The max capacity is 254.
 
-	$plc->write(["DB21.0:string[4]"], [ ["ab"] ]); // actually write "\x04\x02ab"
+	$plc->write([ ["DB21.0:string[4]", "ab"] ]); // actually write "\x04\x02ab"
 	$res = $plc->read(["DB21.0:string[4]"]); // result is "ab"
 
 For variable-length string, all chars (capacity) are read and just return string with the actual length.
