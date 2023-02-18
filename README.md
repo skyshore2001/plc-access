@@ -129,7 +129,9 @@ Usage (level 1): read/write once (short connection)
 
 ```php
 require("common.php");
-require("S7Plc.php");
+require("class/S7Plc.php");
+// require("class/ModbusClient.php"); // for modbus-tcp
+
 try {
 	S7Plc::writePlc("192.168.1.101", [["DB21.0:int32", 70000], ["DB21.4:float", 3.14], ["DB21.12.0:bit", 1]]);
 
