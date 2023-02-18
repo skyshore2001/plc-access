@@ -481,7 +481,7 @@ class S7Plc
 					$value = substr($value, 0, $item1["amount"]);
 				}
 				$value = pack("CC", $item1["amount"], strlen($value)) . $value;
-				$item1["amount"] += 2;
+				$item1["amount"] = strlen($value);
 			}
 			else if ($item1["amount"] > 1) {
 				if (! is_array($value)) {
