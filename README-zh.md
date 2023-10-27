@@ -61,16 +61,20 @@ modbus协议地址格式为：
 
 支持的类型如下：
 
-- int8
-- uint8/byte
+- int8 (sint)
+- uint8/byte (usint)
 - int16/int
 - uint16/word
 - int32/dint
 - uint32/dword
 - bit/bool
-- float
+- float (real/单精度4B-6位有效数字)
+- double (lreal/双精度8B-15位有效数字)
 - char[最大长度]
-- string[最大长度]
+- string[最大长度] (西门子PLC支持长度0-254)
+- TODO: wchar[最大长度]
+- TODO: wstring[最大长度] (西门子PLC支持长度0-65534)
+(西门子S7-1200类型参考: https://www.ad.siemens.com.cn/productportal/Prods/S7-1200_PLC_EASY_PLUS/function/DB_Data%20type/DB_date%20type.html)
 
 数组读写：
 
@@ -111,7 +115,7 @@ modbus协议地址格式为：
 
 	php plc-access.php DB21.0:uint32=0x61000162 DB21.0:byte[4] -x
 
-TODO: 字节序指定参数。
+TODO: 字节序一般为网络序(大端), 若为小端, 可在PlcAccess::typeMap里面为int16/int32等指定fmt2参数。
 
 ## PHP编程示例
 
@@ -208,4 +212,10 @@ $res = $plc->read(["DB21.0:int8[4]", "DB21.4:float", "DB21.8:float"]);
 	$res = $plc->read(["DB21.0:string[4]"]); // 读到"ab"
 
 与定长字符串相比，变长字符串读数据时会读全部长度，返回实际长度的字符串，写数据时只会写指定长度。
+
+**null值**
+
+字符串(char[]或string[])设置值为null与设置""相同.
+数值型设置null与设置0相同.
+读取时必有值, 不可能读出null.
 

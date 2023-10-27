@@ -46,3 +46,15 @@ function myunpack($packData, $format)
 	return unpack($format0, $packData);
 }
 
+class Guard
+{
+	private $fn;
+	function __construct($fn) {
+		assert(is_callable($fn));
+		$this->fn = $fn;
+	}
+	function __destruct() {
+		call_user_func($this->fn);
+	}
+}
+
