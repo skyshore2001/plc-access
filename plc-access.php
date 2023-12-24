@@ -3,54 +3,15 @@
 read:
 	plc-access -h 192.168.1.101 DB1.1:int8
 
-write:
-	plc-access -h 192.168.1.101 DB1.1:uint8=200
-
 write and read:
-	php plc-access.php DB21.1:uint8=0xff  DB21.1.0:bit DB21.1.7:bit  -x
-
-item address: 
-
-- DB{dbNumber}.{startAddr}:{type}
-- DB{dbNumber}.{startAddr}.{bitOffset}:bit
-- array format:
-  - DB{dbNumber}.{startAddr}:{type}[amount]
-  - DB{dbNumber}.{startAddr}.{bitOffset}:bit[amount]
+	plc-access -h 192.168.1.101 DB1.1:uint8=200
 
 command options:
 
 -h : plc host. default=127.0.0.1:102 for snap7, or 127.0.0.1:501 for modbus
 -x : use hex(16-based) number 
 -p : proto. Enum(s7(default), modbus)
-
-type:
-
-- int8
-- uint8/byte
-- int16/int
-- uint16/word
-- int32/dint
-- uint32/dword
-- bit/bool
-- float
-- double
-- char
-- string[max-len]
-
-write array:
-	php plc-access.php -h 192.168.1.101 DB1.1:byte[2]=125,225
-
-handle char:
-
-	php plc-access.php DB21.0:char[4]=A,B,,C
-	php plc-access.php DB21.0:char[4]
-	"AB\u0000C"
-
-	php plc-access.php DB21.0:char[2]=A,B DB21.0:uint8[2]
-	"AB", [65,66]
-
-	php plc-access.php DB21.0:uint32 -x
-	"x41420043"
+-byteorder: handle byte order
 
 modbus-tcp write and read:
 
@@ -84,6 +45,7 @@ $opt = [
 	"proto" => "s7",
 	"addr" => "127.0.0.1",
 	"useHex" => false,
+	"byteorder" => 0,
 	"read" => [],
 	"write" => []
 ];
@@ -107,6 +69,9 @@ foreach ($argv as $i=>$v) {
 		else if ($v == '-x') {
 			$opt['useHex'] = true;
 		}
+		else if ($v == '-byteorder') {
+			$value = "byteorder";
+		}
 		continue;
 	}
 	if (strpos($v, '=') !== false) {
@@ -124,10 +89,17 @@ foreach ($argv as $i=>$v) {
 		$opt['read'][] = $v;
 	}
 }
+if ($value) {
+	echo("*** error: missing param: $value\n");
+	exit(1);
+}
 
 echo("=== access plc {$opt['addr']}\n");
 try {
-	$plc = PlcAccess::create($opt['proto'], $opt['addr']);
+	$plcObjOpt = [
+		"byteorder" => $opt["byteorder"]
+	];
+	$plc = PlcAccess::create($opt['proto'], $opt['addr'], $plcObjOpt);
 	if ($opt['write']) {
 		beforeWrite($opt['write']);
 		$plc->write($opt['write']);

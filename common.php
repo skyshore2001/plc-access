@@ -1,4 +1,8 @@
 <?php
+define("T_HOUR", 3600);
+define("T_DAY", 24*T_HOUR);
+define("FMT_DT", "Y-m-d H:i:s");
+define("FMT_D", "Y-m-d");
 
 function mypack($data, $format = null)
 {
@@ -44,6 +48,29 @@ function myunpack($packData, $format)
 		$format0 .= $format[$i] . $format[$i+1];
 	}
 	return unpack($format0, $packData);
+}
+
+function arrCopy(&$ret, $arr, $fields=null)
+{
+	if ($ret == null)
+		$ret = [];
+	if ($fields == null) {
+		foreach ($arr as $k=>$v) {
+			if (is_int($k)) {
+				$ret[] = $v;
+			}
+			else {
+				$ret[$k] = $v;
+			}
+		}
+		return;
+	}
+	foreach ($fields as $f) {
+		if (is_array($f))
+			@$ret[$f[0]] = $arr[$f[1]];
+		else
+			@$ret[$f] = $arr[$f];
+	}
 }
 
 class Guard

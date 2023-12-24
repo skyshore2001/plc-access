@@ -60,13 +60,19 @@ read/write via modbus-tcp (add param -t: modbus)
 modbus address format:
 
 - S{slaveId}.{startAddr}:{type}
-- NOTE: startAddr is 0-based. Each address contains a WORD (rather than BYTE in S7 protocol).
+- NOTE: startAddr is 0-based. 
+If the type is bit/bool, it reads/writes the coils area of PLC, or else the holding registers areas for other types.
+For holding registers (i.e. PLC area 4), each address contains a 2-byte or 16-bit WORD (rather than BYTE in S7 protocol).
+For coils (i.e. PLC area 0), each address contains 1 bit.
+Some tools like modscan use address format like 40001-49999 for holding registers or 00000-09999 for coils, but here they are both mapped to S{slaveId}.0-S{slaveId}.9998.
 
 Command options:
 
 -h : plc host. default=127.0.0.1, default port for s7 is 102, and 502 for modbus
 -p : proto. Enum(S7(default), modbus)
 -x : read/write using 16-based(hex) numbers.
+-byteorder: byte order mode. default value 0 means Big-Endian or Network-Order or MSB(Most Significant Bit)-First mode.
+1 means Litten-Endian or LSB(Least Significant Bit)-First mode.
 
 Support types:
 
@@ -124,8 +130,6 @@ We can use byte[4] or uint16[2] or uint32 to reach the same effect:
 	php plc-access.php DB21.0:uint32=0x61000162 DB21.0:byte[4] -x
 
 NOTE: It depends to the byte order for uint16/uint32. This example only applies to the big-endian machine like Siemens S7 PLC.
-
-- TODO: some option to specify byte order.
 
 ## Programming read/write PLC
 
